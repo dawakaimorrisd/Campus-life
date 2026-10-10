@@ -1,0 +1,29 @@
+# Netlify hosts the web app only. The game server (WebSockets) runs elsewhere: see docs/deploy.md.
+[build]
+  command = "npm run build -w apps/web"
+  publish = "apps/web/build"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Single page app: every path serves the app shell.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/service-worker.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json"
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/_app/immutable/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

@@ -1,0 +1,40 @@
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap');
+
+:root {
+  --ink: #151a38;
+  --ink-raised: #1f2650;
+  --concrete: #dcd8cc;
+  --concrete-deep: #b9b4a6;
+  --mango: #ffb62e;
+  --mango-deep: #e09a12;
+  --hibiscus: #ec4a74;
+  --mist: #a6b0cf;
+  --font: 'Bricolage Grotesque', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--ink);
+  color: #f3f1ea;
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid var(--mango);
+  outline-offset: 2px;
+}

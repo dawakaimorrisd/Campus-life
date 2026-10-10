@@ -1,0 +1,19 @@
+{
+  "name": "campus-life",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "concurrently -n web,game -c cyan,magenta \"npm:dev:web\" \"npm:dev:server\"",
+    "dev:web": "npm run dev -w @campus/web",
+    "dev:server": "npm run dev -w @campus/game-server",
+    "bots": "npm run bots -w @campus/game-server --",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:psql": "docker compose exec db psql -U campus campuslife",
+    "typecheck": "npm run typecheck -w @campus/shared && npm run typecheck -w @campus/game-server && npm run check -w @campus/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
