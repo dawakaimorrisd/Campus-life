@@ -33,12 +33,15 @@ const C = {
 
 export interface WorldLayers {
   roofs: Array<{ zone: ZoneId; img: Phaser.GameObjects.Image }>;
+  buildingRoofs: Array<{ zones: ZoneId[]; img: Phaser.GameObjects.Image }>;
 }
 
 /**
- * Paints the whole campus once into a single texture ('world') plus a few
- * overhead layers (hut roofs). No image files: swap this for Tiled maps and
- * sprite sheets later without touching gameplay code.
+ * Paints the campus into a single world texture, plus overhead roof layers.
+ *
+ * Building roofs are separate images so CampusScene can fade them when the
+ * local player enters the corresponding building. Hut roofs retain their
+ * original independent fading behavior.
  */
 export function drawWorld(scene: Phaser.Scene): WorldLayers {
   const M = CAMPUS_MAP;
@@ -67,6 +70,7 @@ export function drawWorld(scene: Phaser.Scene): WorldLayers {
       }
     }
   }
+
   for (const p of M.puddles) {
     g.fillStyle(0x5a7a8c, 0.75).fillEllipse(p.x * T + 16, p.y * T + 18, 26, 14);
     g.fillStyle(0x8fb0c2, 0.6).fillEllipse(p.x * T + 13, p.y * T + 15, 10, 5);
@@ -78,17 +82,26 @@ export function drawWorld(scene: Phaser.Scene): WorldLayers {
       for (let x = b.rect.x; x < b.rect.x + b.rect.w; x++) {
         const v = hash(x, y + 11);
         const upstairsGrey = b.style === 'upper' && y === 93;
-        g.fillStyle(upstairsGrey ? C.concrete : C.terracotta[Math.floor(v * 3)], 1).fillRect(x * T, y * T, T, T);
-        g.lineStyle(1, 0x000000, upstairsGrey ? 0.14 : 0.1).strokeRect(x * T + 0.5, y * T + 0.5, T - 1, T - 1);
+        g.fillStyle(upstairsGrey ? C.concrete : C.terracotta[Math.floor(v * 3)], 1)
+          .fillRect(x * T, y * T, T, T);
+        g.lineStyle(1, 0x000000, upstairsGrey ? 0.14 : 0.1)
+          .strokeRect(x * T + 0.5, y * T + 0.5, T - 1, T - 1);
+
         const z = M.zones.find((zz) => inZone(zz, x, y));
         if (!upstairsGrey && z?.id === 'admin_hallway' && (x + y) % 2 === 0) {
-          g.fillStyle(0xd9a37a, 0.45).fillTriangle(x * T + 16, y * T + 6, x * T + 26, y * T + 16, x * T + 16, y * T + 26);
-          g.fillStyle(0xd9a37a, 0.45).fillTriangle(x * T + 16, y * T + 6, x * T + 6, y * T + 16, x * T + 16, y * T + 26);
+          g.fillStyle(0xd9a37a, 0.45)
+            .fillTriangle(x * T + 16, y * T + 6, x * T + 26, y * T + 16, x * T + 16, y * T + 26);
+          g.fillStyle(0xd9a37a, 0.45)
+            .fillTriangle(x * T + 16, y * T + 6, x * T + 6, y * T + 16, x * T + 16, y * T + 26);
         }
-        if (z?.id === 'student_center' && v < 0.06) g.fillStyle(0xf4f1ea, 0.8).fillRect(x * T + 8 + ((v * 300) % 12), y * T + 12, 6, 4); // wrappers
+        if (z?.id === 'student_center' && v < 0.06) {
+          g.fillStyle(0xf4f1ea, 0.8)
+            .fillRect(x * T + 8 + ((v * 300) % 12), y * T + 12, 6, 4);
+        }
       }
     }
   }
+
   // Administrative Hall: beige circular wallpaper along its east wall.
   for (let y = 7; y < 14; y++) {
     g.fillStyle(0xcdb48a, 1).fillRect(26 * T - 7, y * T, 7, T);
@@ -108,6 +121,7 @@ export function drawWorld(scene: Phaser.Scene): WorldLayers {
       const w = M.walls[y * MAP_W + x];
       if (!w) continue;
       const b = M.buildings.find((bb) => inRect(bb.rect, x, y));
+
       if (w === 1) {
         g.fillStyle(C.creamDark, 1).fillRect(x * T, y * T, T, T);
         g.fillStyle(C.cream, 1).fillRect(x * T, y * T, T, T - 8);
@@ -119,21 +133,40 @@ export function drawWorld(scene: Phaser.Scene): WorldLayers {
       }
     }
   }
+
   for (const d of M.doors) {
     for (let y = d.rect.y; y < d.rect.y + d.rect.h; y++) {
       for (let x = d.rect.x; x < d.rect.x + d.rect.w; x++) {
         g.fillStyle(C.wood, 1).fillRect(x * T, y * T, T, T);
         g.fillStyle(C.woodLight, 1).fillRect(x * T + 3, y * T + 3, T - 6, T - 6);
-        g.fillStyle(0xd7b46a, 1).fillCircle(x * T + (d.rect.w > 1 ? (x === d.rect.x ? 26 : 6) : 16), y * T + 17, 2.5);
+        g.fillStyle(0xd7b46a, 1).fillCircle(
+          x * T + (d.rect.w > 1 ? (x === d.rect.x ? 26 : 6) : 16),
+          y * T + 17,
+          2.5
+        );
       }
     }
   }
+
   // Notices on the Admin Hallway wall.
-  for (const [nx, ny, col] of [[7, 14, 0xf4f1ea], [12, 14, 0xf2d13b], [17, 14, 0xf4f1ea], [23, 14, 0xe5a0a0]] as const) {
+  for (const [nx, ny, col] of [
+    [7, 14, 0xf4f1ea],
+    [12, 14, 0xf2d13b],
+    [17, 14, 0xf4f1ea],
+    [23, 14, 0xe5a0a0]
+  ] as const) {
     g.fillStyle(col, 1).fillRect(nx * T + 6, ny * T + 14, 12, 10);
   }
+
   // Fluorescent strips along corridor ceilings.
-  for (const [x, y, w] of [[7, 16, 5], [15, 16, 5], [23, 16, 3], [24, 93, 5], [32, 93, 4], [39, 93, 6]] as const) {
+  for (const [x, y, w] of [
+    [7, 16, 5],
+    [15, 16, 5],
+    [23, 16, 3],
+    [24, 93, 5],
+    [32, 93, 4],
+    [39, 93, 6]
+  ] as const) {
     g.fillStyle(0xf8f8e8, 0.35).fillRoundedRect(x * T, y * T + 10, w * T, 8, 3);
   }
 
@@ -145,15 +178,119 @@ export function drawWorld(scene: Phaser.Scene): WorldLayers {
 
   for (const s of M.signs) addSign(scene, s);
 
+  // ---- building roofs: separate layers that can fade independently ----
+  const buildingRoofs: WorldLayers['buildingRoofs'] = [];
+
+  const buildingRoofZones: Record<string, ZoneId[]> = {
+    admin: ['agri_office', 'admin_hall', 'admin_hallway'],
+    student_block: ['student_hall', 'staircase'],
+    student_center: ['student_center'],
+    upstairs: ['classroom_a', 'classroom_b', 'upstairs_corridor', 'library']
+  };
+
+  for (const b of M.buildings) {
+    const zones = buildingRoofZones[b.id];
+    if (!zones) continue;
+
+    const key = `building-roof:${b.id}`;
+    makeBuildingRoofTexture(scene, key, b);
+
+    const x = (b.rect.x + b.rect.w / 2) * T;
+    const y = (b.rect.y + b.rect.h / 2) * T;
+    const img = scene.add.image(x, y, key).setDepth(50000).setAlpha(0.98);
+
+    buildingRoofs.push({ zones, img });
+  }
+
   // Hut roofs sit above players but fade when you walk under them.
   const roofs: WorldLayers['roofs'] = [];
   for (const h of M.huts) {
     const key = `roof:${h.zone}`;
     makeRoofTexture(scene, key, h);
-    const img = scene.add.image(h.cx * T, h.cy * T, key).setDepth(50000).setAlpha(0.3);
+    const img = scene.add.image(h.cx * T, h.cy * T, key).setDepth(50001).setAlpha(0.3);
     roofs.push({ zone: h.zone, img });
   }
-  return { roofs };
+
+  return { roofs, buildingRoofs };
+}
+
+/**
+ * Draws a roof as its own texture so the roof can be hidden without hiding
+ * the floor, walls, furniture, or people inside the building.
+ */
+function makeBuildingRoofTexture(
+  scene: Phaser.Scene,
+  key: string,
+  building: (typeof CAMPUS_MAP.buildings)[number]
+) {
+  if (scene.textures.exists(key)) return;
+
+  const width = Math.ceil(building.rect.w * T) + 12;
+  const height = Math.ceil(building.rect.h * T) + 12;
+  const g = scene.make.graphics({ x: 0, y: 0 }, false);
+
+  const x = 6;
+  const y = 6;
+  const w = width - 12;
+  const h = height - 12;
+
+  const roofColor =
+    building.style === 'admin' ? 0x3d5363 :
+    building.style === 'student' ? 0x3f5d67 :
+    building.style === 'center' ? 0x8f3d32 :
+    0x55445f;
+
+  const roofDark =
+    building.style === 'admin' ? 0x263844 :
+    building.style === 'student' ? 0x263f47 :
+    building.style === 'center' ? 0x632820 :
+    0x372b40;
+
+  const roofLight =
+    building.style === 'admin' ? 0x71838c :
+    building.style === 'student' ? 0x68868b :
+    building.style === 'center' ? 0xc16a4f :
+    0x82718c;
+
+  // Drop shadow and thick outer roof edge.
+  g.fillStyle(0x000000, 0.28).fillRoundedRect(x + 4, y + 6, w, h, 5);
+  g.fillStyle(roofDark, 1).fillRoundedRect(x, y, w, h, 5);
+  g.fillStyle(roofColor, 1).fillRoundedRect(x + 4, y + 4, w - 8, h - 8);
+
+  // Subtle roof panels, aligned consistently with the tile grid.
+  g.lineStyle(2, roofDark, 0.7);
+  for (let px = x + 12; px < x + w - 8; px += 24) {
+    g.lineBetween(px, y + 7, px, y + h - 7);
+  }
+  for (let py = y + 16; py < y + h - 8; py += 24) {
+    g.lineStyle(1, roofDark, 0.45);
+    g.lineBetween(x + 7, py, x + w - 7, py);
+  }
+
+  // Raised central strip gives the roof a readable 2.5D surface.
+  g.fillStyle(roofLight, 0.48).fillRoundedRect(
+    x + 8,
+    y + 8,
+    Math.max(12, w - 16),
+    5,
+    2
+  );
+
+  // Border highlights.
+  g.lineStyle(2, roofLight, 0.9).strokeRoundedRect(x + 3, y + 3, w - 6, h - 6, 4);
+  g.lineStyle(1, 0x151a20, 0.65).strokeRoundedRect(x + 1, y + 1, w - 2, h - 2, 5);
+
+  // Small roof vents; keep them decorative and away from the edges.
+  const ventCount = Math.max(1, Math.floor(building.rect.w / 8));
+  for (let i = 0; i < ventCount; i++) {
+    const vx = x + 16 + i * ((w - 32) / Math.max(ventCount - 1, 1));
+    const vy = y + h * 0.55;
+    g.fillStyle(roofDark, 1).fillRoundedRect(vx - 5, vy - 4, 10, 8, 2);
+    g.fillStyle(roofLight, 0.8).fillRect(vx - 3, vy - 3, 6, 2);
+  }
+
+  g.generateTexture(key, width, height);
+  g.destroy();
 }
 
 function drawHutBase(g: Phaser.GameObjects.Graphics, h: Hut) {
@@ -189,7 +326,12 @@ function makeRoofTexture(scene: Phaser.Scene, key: string, h: Hut) {
   g.lineStyle(2, 0x543725, 0.65);
   for (let a = 0; a < 24; a++) {
     const ang = (a * Math.PI * 2) / 24;
-    g.lineBetween(c + Math.cos(ang) * 14, c + Math.sin(ang) * 14, c + Math.cos(ang) * (R - 8), c + Math.sin(ang) * (R - 8));
+    g.lineBetween(
+      c + Math.cos(ang) * 14,
+      c + Math.sin(ang) * 14,
+      c + Math.cos(ang) * (R - 8),
+      c + Math.sin(ang) * (R - 8)
+    );
   }
   g.fillStyle(0x3a2619, 1).fillCircle(c, c, 8);
   g.generateTexture(key, size, size);
@@ -210,7 +352,12 @@ function drawTree(g: Phaser.GameObjects.Graphics, tx: number, ty: number, kind: 
   for (let i = 0; i < fronds; i++) {
     const a = (i / fronds) * Math.PI * 2 + hash(tx, ty) * 2;
     const len = 17;
-    g.lineStyle(5, i % 2 ? 0x2f7d3b : 0x3d9448, 1).lineBetween(cx + 2, cy - 5, cx + 2 + Math.cos(a) * len, cy - 5 + Math.sin(a) * len * 0.8);
+    g.lineStyle(5, i % 2 ? 0x2f7d3b : 0x3d9448, 1).lineBetween(
+      cx + 2,
+      cy - 5,
+      cx + 2 + Math.cos(a) * len,
+      cy - 5 + Math.sin(a) * len * 0.8
+    );
   }
   g.fillStyle(0x2a6b34, 1).fillCircle(cx + 2, cy - 5, 4);
 }
@@ -239,7 +386,7 @@ function drawFurniture(g: Phaser.GameObjects.Graphics, f: Furniture) {
   const w = f.rect.w * T;
   const h = f.rect.h * T;
   switch (f.kind) {
-    case 'desk': // writing tablet on a heavy chair arm
+    case 'desk':
       g.fillStyle(0x000000, 0.2).fillRoundedRect(x + 5, y + 10, 24, 18, 3);
       g.fillStyle(C.wood, 1).fillRoundedRect(x + 4, y + 8, 24, 18, 3);
       g.fillStyle(0x8a6240, 1).fillRoundedRect(x + 6, y + 10, 20, 12, 2);
@@ -256,7 +403,9 @@ function drawFurniture(g: Phaser.GameObjects.Graphics, f: Furniture) {
       g.fillStyle(0x000000, 0.2).fillRoundedRect(x + 3, y + 7, w - 3, h - 3, 6);
       g.fillStyle(C.wood, 1).fillRoundedRect(x + 1, y + 3, w - 2, h - 5, 6);
       g.fillStyle(0x7a5236, 1).fillRoundedRect(x + 5, y + 7, w - 10, h - 13, 4);
-      if (f.kind === 'table' && hash(f.rect.x, f.rect.y) > 0.45) g.fillStyle(0xf4f1ea, 1).fillRect(x + 10, y + 12, 9, 6); // papers
+      if (f.kind === 'table' && hash(f.rect.x, f.rect.y) > 0.45) {
+        g.fillStyle(0xf4f1ea, 1).fillRect(x + 10, y + 12, 9, 6);
+      }
       break;
     case 'bench':
       g.fillStyle(0x000000, 0.18).fillRoundedRect(x + 2, y + 6, w - 2, h - 2, 5);
@@ -268,7 +417,7 @@ function drawFurniture(g: Phaser.GameObjects.Graphics, f: Furniture) {
       g.fillStyle(0x6a4a2e, 1).fillRoundedRect(x + 1, y + 3, w - 2, h - 5, 3);
       g.fillStyle(0xcfae7a, 1).fillRoundedRect(x + 3, y + 5, w - 6, h - 13, 2);
       break;
-    case 'stall': // Back Palaver serving stall with food pots and a teal canopy edge
+    case 'stall':
       g.fillStyle(0x000000, 0.2).fillRect(x + 2, y + 8, w - 2, h - 2);
       g.fillStyle(0x5a3d27, 1).fillRoundedRect(x, y + 2, w, h - 3, 4);
       g.fillStyle(0xcfae7a, 1).fillRect(x + 4, y + h - 22, w - 8, 14);
@@ -290,7 +439,9 @@ function drawFurniture(g: Phaser.GameObjects.Graphics, f: Furniture) {
     case 'filing':
       g.fillStyle(0x000000, 0.2).fillRect(x + 2, y + 8, w - 2, h - 3);
       g.fillStyle(0x8a9097, 1).fillRect(x + 1, y + 3, w - 2, h - 5);
-      for (let i = 0; i < w / T * 2; i++) g.fillStyle(0x6c7279, 1).fillRect(x + 4 + i * 16, y + 8, 12, 4);
+      for (let i = 0; i < w / T * 2; i++) {
+        g.fillStyle(0x6c7279, 1).fillRect(x + 4 + i * 16, y + 8, 12, 4);
+      }
       break;
     case 'stacked_chairs':
       for (let k = 0; k < f.rect.h; k++) {
@@ -318,8 +469,13 @@ function drawFurniture(g: Phaser.GameObjects.Graphics, f: Furniture) {
         }
       }
       g.lineStyle(3, 0xffffff, 1);
-      if (horizontal) { g.lineBetween(x + 1, y, x + 1, y + h); g.lineBetween(x + w - 1, y, x + w - 1, y + h); }
-      else { g.lineBetween(x, y + 1, x + w, y + 1); g.lineBetween(x, y + h - 1, x + w, y + h - 1); }
+      if (horizontal) {
+        g.lineBetween(x + 1, y, x + 1, y + h);
+        g.lineBetween(x + w - 1, y, x + w - 1, y + h);
+      } else {
+        g.lineBetween(x, y + 1, x + w, y + 1);
+        g.lineBetween(x, y + h - 1, x + w, y + h - 1);
+      }
       break;
     }
     case 'hedge':
@@ -362,6 +518,7 @@ function addSign(scene: Phaser.Scene, s: Sign) {
       : s.kind === 'banner'
         ? { fontSize: '16px', fontStyle: 'bold', color: '#ffffff', backgroundColor: '#167e80', padding: { x: 14, y: 6 } }
         : { fontSize: '9px', fontStyle: 'bold', color: '#1d1d1d', backgroundColor: '#e6d9a8', padding: { x: 4, y: 2 } };
+
   scene.add
     .text(s.x * T, s.y * T, s.text, { fontFamily: FONT, ...style })
     .setOrigin(0.5, s.kind === 'label' ? 1 : 0.5)
